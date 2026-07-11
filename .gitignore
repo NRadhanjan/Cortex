@@ -1,0 +1,6 @@
+notes/*
+!notes/example_*
+chroma_db/
+*.pyc
+__pycache__/
+.env
