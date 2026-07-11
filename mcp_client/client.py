@@ -10,6 +10,7 @@ from contextlib import AsyncExitStack
 SERVERS = {
     "notes": "http://localhost:8000/sse",
     "calendar": "http://localhost:8001/sse",
+    "github": "http://localhost:8002/sse",
 }
 
 async def ask_cortex(user_question, model="openai/gpt-oss-120b", max_retries=5):
@@ -41,13 +42,12 @@ async def ask_cortex(user_question, model="openai/gpt-oss-120b", max_retries=5):
         messages = [
             {
                 "role": "system",
-                "content": "You have access to multiple tools. Use `search_notes` only for questions about specific academic concepts from the user's notes. Use `generate_schedule` when the user asks for a study plan, schedule, or wants topics distributed across days."
+                "content": "You have access to multiple tools. Use `search_notes` for questions about academic concepts from the user's coursework notes. Use `generate_schedule` when the user asks for a study plan or schedule. Use `list_my_projects` or `get_project_readme` when the user asks about the user's own GitHub projects, code, or portfolio."
             },
             {"role": "user", "content": user_question}
         ]
 
         response_message = None
-        last_error = None
         for attempt in range(max_retries):
             try:
                 response = groq_client.chat.completions.create(
@@ -58,13 +58,11 @@ async def ask_cortex(user_question, model="openai/gpt-oss-120b", max_retries=5):
                     temperature=0.1
                 )
                 response_message = response.choices[0].message
-                last_error = None
                 break
             except BadRequestError as e:
-                last_error = e
                 if "tool_use_failed" in str(e) and attempt < max_retries - 1:
                     print(f"[Tool call malformed, retrying... attempt {attempt + 2}/{max_retries}]")
-                    await asyncio.sleep(1 * (attempt + 1))  # backoff: 1s, 2s, 3s, 4s
+                    await asyncio.sleep(1 * (attempt + 1))
                     continue
                 raise
 
@@ -93,5 +91,5 @@ async def ask_cortex(user_question, model="openai/gpt-oss-120b", max_retries=5):
 
 if __name__ == "__main__":
     import asyncio as aio
-    answer = aio.run(ask_cortex("What is a linked list?"))
+    answer = aio.run(ask_cortex("List my GitHub projects"))
     print(answer)
