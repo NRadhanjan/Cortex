@@ -42,7 +42,14 @@ async def ask_cortex(user_question, model="openai/gpt-oss-120b", max_retries=5):
         messages = [
             {
                 "role": "system",
-                "content": "You have access to multiple tools. Use `search_notes` for questions about academic concepts from the user's coursework notes. Use `generate_schedule` when the user asks for a study plan or schedule. Use `list_my_projects` or `get_project_readme` when the user asks about the user's own GitHub projects, code, or portfolio."
+                "content": (
+                    "You have access to multiple tools. "
+                    "Use `search_notes` for questions about academic concepts from the user's coursework notes. "
+                    "Use `generate_schedule` when the user asks for a study plan or schedule. "
+                    "Use `list_my_projects` for a general overview of the user's GitHub projects. "
+                    "Use `get_project_readme` when the user asks for details about ONE specific named project, "
+                    "and pass the exact repo name as the argument."
+                )
             },
             {"role": "user", "content": user_question}
         ]
@@ -75,15 +82,27 @@ async def ask_cortex(user_question, model="openai/gpt-oss-120b", max_retries=5):
             result = await sessions[target_server].call_tool(tool_call.function.name, args)
             tool_result_text = result.content[0].text
 
-            messages.append(response_message)
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "content": tool_result_text
-            })
+            # clean, fresh message list for the final answer — no tool-call transcript, no tools offered
+            final_messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "Answer the user's question using ONLY the information provided below. "
+                        "Do not attempt to call any tools. "
+                        "If the retrieved information is insufficient to fully answer the question, "
+                        "say so clearly rather than guessing or inferring details not present in the information."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"Question: {user_question}\n\nInformation retrieved:\n{tool_result_text}"
+                }
+            ]
+
             final = groq_client.chat.completions.create(
                 model=model,
-                messages=messages
+                messages=final_messages,
+                temperature=0.1
             )
             return final.choices[0].message.content
         else:
